@@ -12,13 +12,12 @@ kramdown:
   enable_coderay: false
 
 presentation:
-    title: Название темы
-    service: Сервис
-    nda: true
+    title: Пишем парсер
+    nda: false
 
 author:
-    name: Автор
-    position: Должность
+    name: Никита Зубков
+    position: Разработчик
     company:
         name: Яндекс
         url:  http://yandex.ru/
