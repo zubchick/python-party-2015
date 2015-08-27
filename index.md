@@ -9,7 +9,6 @@ layout: default
 ## **{{ site.presentation.title }}** {#cover}
 
 <div class="s">
-    <div class="service">{{ site.presentation.service }}</div>
 </div>
 
 {% if site.presentation.nda %}
