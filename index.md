@@ -54,6 +54,12 @@ layout: default
 
 ## Пример подсветки кода на JavaScript
 
+
+{% highlight python %}
+def yourfunction():
+     print "Hello World!"
+{% endhighlight %}
+
 ~~~ javascript
 !function() {
     var jar,

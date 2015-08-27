@@ -600,15 +600,16 @@ body .slide:first-of-type h2
 
 /* Code */
 .slide code[class*='language-'],
-.slide pre[class*='language-']
+.slide pre
 {
     font-family: 'InputMono' !important;
     font-size: 21px;
     line-height: 1.2;
 }
 
-.slide pre[class*='language-']
+.slide pre
 {
+    background: hsl(0, 0%, 8%);
     overflow: auto;
 
     width: 984px;
@@ -620,7 +621,7 @@ body .slide:first-of-type h2
     box-shadow: none;
 }
 
-.slide.big-code pre[class*='language-']
+.slide.big-code pre
 {
     position: absolute;
     top: -11px;
@@ -799,7 +800,7 @@ body .slide:first-of-type h2
     width: 100%;
   }
 
-  .slide pre[class*='language-'] {
+  .slide pre {
     margin: 0;
   }
 
@@ -817,7 +818,7 @@ body .slide:first-of-type h2
   }
 
 
-  .slide.big-code pre[class*='language-'] {
+  .slide.big-code pre {
     left: 0;
   }
 
