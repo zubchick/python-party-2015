@@ -1,4 +1,5 @@
 # coding: utf-8
+import os
 import sys
 from pprint import pprint
 from datetime import datetime
@@ -12,10 +13,7 @@ __classes = {}
 
 def register(cls):
     __classes[cls.value] = cls
-
-    def init(*args, **kwargs):
-        return cls(*args, **kwargs)
-    return init
+    return cls
 
 
 def choose_class(token):
@@ -34,8 +32,8 @@ class Operator(AST):
         self.children = children
 
     def __repr__(self):
-        return self.value
-        return "%s %s %s" % (self.__class__.__name__, self.value, map(repr, self.children))
+        return "%s %s (%s)" % (self.__class__.__name__,
+                               self.value, map(repr, self.children))
 
 
 class LogicalOperator(Operator):
@@ -52,7 +50,7 @@ class CmpOperator(Operator):
 
 class Function(AST):
     func_map = {
-        'me': lambda: 'zubchick',
+        'me': os.getlogin,
         'today': lambda: int(datetime.today().strftime('%s')),
     }
 
@@ -114,7 +112,7 @@ class LteOp(CmpOperator):
 
 
 @register
-class RegexpOp(CmpOperator):
+class RegexOp(CmpOperator):
     value = '~='
     operator = '$regex'
 
@@ -134,7 +132,7 @@ class EqOp(CmpOperator):
 from funcparserlib.lexer import make_tokenizer, Token
 
 SPECS = [
-    ('CMP', (r'~=|>=|<=|<|>|=',)),
+    ('CMP', (r'~=|>=|<=|@=|<|>|=',)),
     ('BR', (r'\(|\)',)),
     ('OP', (r'AND|OR',)),
     ('SPACE', (r'[ \t\r\n]+',)),
@@ -162,7 +160,7 @@ close_brace = skip(a(Token('BR', ')')))
 function = word + open_brace + close_brace >> Function
 
 # field_expr: WORD operator value
-field_expr = (word + operator + (function | value)) >> (lambda x: x[1]([x[0], x[2]]))
+fieldexpr = (word + operator + (function | value)) >> (lambda x: x[1]([x[0], x[2]]))
 
 OR = a(Token('OP', 'OR')) >> choose_class
 AND = a(Token('OP', 'AND')) >> choose_class
@@ -170,22 +168,20 @@ AND = a(Token('OP', 'AND')) >> choose_class
 
 def eval(data):
     lft, args = data
-    import ipdb; ipdb.set_trace()
     return reduce(lambda arg1, (f, arg2): f([arg1, arg2]), args, lft)
 
 
 expr = forward_decl()
-base_expr = field_expr | open_brace + expr + close_brace
-and_expr = (base_expr + many(AND + base_expr)) >> eval
-or_expr = (and_expr + many(OR + and_expr)) >> eval
+basexpr = open_brace + expr + close_brace | fieldexpr
+andexpr = (basexpr + many(AND + basexpr)) >> eval
+orexpr = (andexpr + many(OR + andexpr)) >> eval
+expr.define(orexpr)
 
-expr.define(or_expr)
-expr.parse(tokenize('author=zubchick AND title~=qwe AND a=3 AND b=4'))
-import ipdb; ipdb.set_trace()
+
 # проверяем
 from funcparserlib.util import pretty_tree as pretty
 
-query = 'author=zubchick AND title~=test AND pub_date>=today()'
+query = 'author=zubchick AND title~=test OR pub_date>=today()'
 query = sys.argv[1] if len(sys.argv) > 1 else query
 res = expr.parse(tokenize(query))
 

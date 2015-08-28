@@ -44,7 +44,7 @@ layout: default
 ## Синтаксис
 
 {% highlight sql %}
-author=zubchick AND title~=test AND created>=today()
+author=zubchick AND title~=test OR created>=today()
 {% endhighlight %}
 
 {% highlight sql %}
@@ -69,7 +69,7 @@ author=zubchick AND title~=test AND created>=today()
 ## Составные части
 
 ### Логические операторы
-<pre><code class="language-sql" data-lang="sql">author=zubchick <span class="k">AND</span> title~=test <span class="k">AND</span> created>=today()
+<pre><code class="language-sql" data-lang="sql">author=zubchick <span class="k">AND</span> title~=test <span class="k">OR</span> created>=today()
 </code></pre>
 
 * <code>AND</code>
@@ -78,7 +78,7 @@ author=zubchick AND title~=test AND created>=today()
 ## Составные части
 
 ### Операторы сравнения
-<pre><code class="language-sql" data-lang="sql">author<span class="o">=</span>zubchick AND title<span class="o">~=</span>test AND created<span class="o">>=</span>today()
+<pre><code class="language-sql" data-lang="sql">author<span class="o">=</span>zubchick AND title<span class="o">~=</span>test OR created<span class="o">>=</span>today()
 </code></pre>
 * <code>~=</code>
 * <code>&gt;=</code>
@@ -91,14 +91,14 @@ author=zubchick AND title~=test AND created>=today()
 
 ### Имена полей
 <pre><code class="language-sql" data-lang="sql"><span
-class="ss">author</span>=zubchick AND <span class="ss">title</span>~=test AND <span class="ss">created</span>>=today()
+class="ss">author</span>=zubchick AND <span class="ss">title</span>~=test OR <span class="ss">created</span>>=today()
 </code></pre>
 
 ## Составные части
 
 ### Текст в кавычках и без
 <pre><code class="language-sql" data-lang="sql">author=<span
-class="ss">zubchick</span> AND title~=<span class="ss">test</span> AND created>=today()
+class="ss">zubchick</span> AND title~=<span class="ss">test</span> OR created>=today()
 </code></pre>
 
 
@@ -110,7 +110,7 @@ class="ss">test_user</span>) AND created=<span class="ss">"19-08-2015"</span> AN
 ## Составные части
 
 ### Функции
-<pre><code class="language-sql" data-lang="sql">author=zubchick AND title~=test AND created>=<span class="ss">today()</span>
+<pre><code class="language-sql" data-lang="sql">author=zubchick AND title~=test OR created>=<span class="ss">today()</span>
 </code></pre>
 
 <pre><code class="language-sql" data-lang="sql">(author=<span class="ss">me()</span> OR author=test_user) AND created="19-08-2015" AND type=bug
@@ -159,7 +159,7 @@ class Token(object):
 
 ## Проверяем
 {% highlight python %}
-In [3]: tokenize('author=zubchick AND title~=test AND created>=today()')
+In [3]: tokenize('author=zubchick AND title~=test OR created>=today()')
 Out[3]:
 [Token('WORD', 'author'),
  Token('CMP', '='),
@@ -168,7 +168,7 @@ Out[3]:
  Token('WORD', 'title'),
  Token('CMP', '~='),
  Token('WORD', 'test'),
- Token('OP', 'AND'),
+ Token('OP', 'OR'),
  Token('WORD', 'created'),
  Token('CMP', '>='),
  Token('WORD', 'today'),
@@ -204,7 +204,7 @@ value      = STRING | WORD;
 ## Синтаксис
 
 {% highlight sql %}
-author=zubchick AND title~=test AND created>=today()
+author=zubchick AND title~=test OR created>=today()
 {% endhighlight %}
 
 {% highlight sql %}
@@ -339,7 +339,7 @@ class GteOp(CmpOperator):
 class LteOp(CmpOperator):
     value = '>='
 
-class RegexpOp(CmpOperator):
+class RegexOp(CmpOperator):
     value = '~='
 
 class ContainsOp(CmpOperator):
@@ -365,11 +365,11 @@ AND = a(Token('OP', 'AND')) >> lambda tok: AndOp
 ## Разворачиваем в дерево
 {:.images .two}
 
-<img width="400px" src="pictures/ast2.svg">
-*Текст*
+<img width="400px" height="400px" src="pictures/ast1.svg">
+*Результат работы парсера andexpr*
 
-<img width="400px" src="pictures/ast1.svg">
-*Текст*
+<img width="400px" height="400px" src="pictures/ast2.svg">
+*AST*
 
 
 ## Разворачиваем в дерево
@@ -380,269 +380,132 @@ def eval(data):
 {% endhighlight %}
 
 
-
-
-
-
-
-<!-- Рыба -->
-
-
-## Верхний колонтитул
+## AST
 {:.section}
 
-### Название раздела
+### Компиляция
 
-## Заголовок
 
-### Вводный текст (первый уровень текста)
+## Компиляция запроса в монгу
+{% highlight sql %}
+author=zubchick AND title~=test OR created>=today()
+{% endhighlight %}
 
-*  Второй уровень текста
-	* Третий уровень текста (буллиты)
+{% highlight python %}
+{'$or': [{'$and': [{'author': {'$eq': 'zubchick'}},
+                   {'title': {'$regex': 'test'}}]},
+         {'created': {'$gte': 1440761425}}]}
+{% endhighlight %}
 
-	1. Четвертый уровень текста
-
-## Заголовок
-
-### Вводный текст (первый уровень текста)
-![placeholder](pictures/vertical-placeholder.png){:.right-image}
-
-*  Второй уровень текста
-	* Третий уровень текста (буллиты)
-	* Третий уровень текста (буллиты)
-
-	1. Четвертый уровень текста
-
-## &nbsp;
-{:.with-big-quote}
-> Цитата
-
-Текст
-{:.note}
-
-## Пример подсветки кода на JavaScript
-
-~~~ javascript
-!function() {
-    var jar,
-        rstoreNames = /[^\w]/g,
-        storageInfo = window.storageInfo || window.webkitStorageInfo,
-        toString = "".toString;
-
-    jar = this.jar = function( name, storage ) {
-        return new jar.fn.init( name, storage );
-    };
-
-    jar.storages = [];
-    jar.instances = {};
-    jar.prefixes = {
-        storageInfo: storageInfo
-    };
-
-    jar.prototype = this.jar.fn = {
-        constructor: jar,
-
-        version: 0,
-
-        storages: [],
-        support: {},
-
-        types: [ "xml", "html", "javascript", "js", "css", "text", "json" ],
-
-        init: function( name, storage ) {
-
-            // Name of a object store must contain only alphabetical symbols or low dash
-            this.name = name ? name.replace( rstoreNames, "_" ) : "jar";
-            this.deferreds = {};
-
-            if ( !storage ) {
-                this.order = jar.order;
-            }
-
-            // TODO – add support for aliases
-            return this.setup( storage || this.storages );
-        },
-
-        // Setup for all storages
-        setup: function( storages ) {
-            this.storages = storages = storages.split ? storages.split(" ") : storages;
-
-            var storage,
-                self = this,
-                def = this.register(),
-                rejects = [],
-                defs = [];
-
-            this.stores = jar.instances[ this.name ] || {};
-
-            // Jar store meta-info in lc, if we don't have it – reject call
-            if ( !window.localStorage ) {
-                window.setTimeout(function() {
-                    def.reject();
-                });
-                return this;
-            }
-
-            // Initiate all storages that we can work with
-            for ( var i = 0, l = storages.length; i < l; i++ ) {
-                storage = storages[ i ];
-
-                // This check needed if user explicitly specified storage that
-                // he wants to work with, whereas browser don't implement it
-                if ( jar.isUsed( storage ) ) {
-
-                    // If jar with the same name was created, do not try to re-create store
-                    if ( !this.stores[ storage ] ) {
-
-                        // Initiate storage
-                        defs.push( this[ storage ]( this.name, this ) );
-
-                        // Initiate meta-data for this storage
-                        this.log( storage );
-                    }
-
-                } else {
-                    rejects.push( storage );
-                }
-            }
-
-            if ( !this.order ) {
-                this.order = {};
-
-                for ( i = 0, l = this.types.length; i < l; i++ ) {
-                    this.order[ this.types[ i ] ] = storages;
-                }
-            }
-
-            if ( rejects.length == storages.length ) {
-                window.setTimeout(function() {
-                    def.reject();
-                });
-
-            } else {
-                jar.when.apply( this, defs )
-                    .done(function() {
-                        jar.instances[ this.name ] = this.stores;
-
-                        window.setTimeout(function() {
-                            def.resolve([ self ]);
-                        });
-                    })
-                    .fail(function() {
-                        def.reject();
-                    });
-            }
-            return this;
-        }
-    };
-
-    jar.fn.init.prototype = jar.fn;
-
-    jar.has = function( base, name ) {
-        return !!jar.fn.meta( name, base.replace( rstoreNames, "_" ) );
-    };
-}.call( window );
-~~~
-
-## Пример подсветки кода
-{:.code-with-text}
-
-Вводный текст
-
-~~~ javascript
-var jar,
-    rstoreNames = /[^\w]/g,
-    storageInfo = window.storageInfo || window.webkitStorageInfo,
-    toString = "".toString;
-
-jar = this.jar = function( name, storage ) {
-    return new jar.fn.init( name, storage );
-};
-~~~
 
 ## &nbsp;
 {:.big-code}
+{% highlight python %}
+class AndOp(LogicalOperator):
+    value = 'AND'
+    operator = '$and'
 
-~~~ javascript
-!function() {
-    var jar,
-        rstoreNames = /[^\w]/g,
-        storageInfo = window.storageInfo || window.webkitStorageInfo,
-        toString = "".toString;
+class OrOp(LogicalOperator):
+    value = 'OR'
+    operator = '$or'
 
-    jar = this.jar = function( name, storage ) {
-        return new jar.fn.init( name, storage );
-    };
+class GtOp(CmpOperator):
+    value = '>'
+    operator = '$gt'
 
-    jar.storages = [];
-    jar.instances = {};
-    jar.prefixes = {
-        storageInfo: storageInfo
-    };
-}.call( window );
-~~~
+class RegexOp(CmpOperator):
+    value = '~='
+    operator = '$regex'
 
-## LaTeX
+class ContainsOp(CmpOperator):
+    value = '@='
+    operator = '$in'
 
-Библиотека для латекса довольно тяжелая, а нужна она в редких случаях.
-Поэтому она не включена в репу, ее нужно либо установить через bower либо иметь интернет.
-
-When $a \ne 0$, there are two solutions to \(ax^2 + bx + c = 0\) and they are
-$$x = {-b \pm \sqrt{b^2-4ac} \over 2a}.$$
-
-## Заголовок
-{:.images}
-
-![](pictures/horizontal-placeholder.png)
-*Текст*
-
-![](pictures/horizontal-placeholder.png)
-*Текст*
-
-![](pictures/horizontal-placeholder.png)
-*Текст*
-
-## Заголовок
-{:.images .two}
-
-![](pictures/horizontal-middle-placeholder.png)
-*Текст*
-
-![](pictures/horizontal-middle-placeholder.png)
-*Текст*
-
-## Заголовок
-{:.center}
-
-![](pictures/horizontal-big-placeholder.png){:.tmp}
-
-## **![](pictures/cover-placeholder.png)**
-
-## ![](pictures/horizontal-cover-placeholder.png)
-{:.cover}
-
-## Таблица
-
-|  Locavore      | Umami       | Helvetica | Vegan     |
-+----------------|-------------|-----------|-----------+
-| Fingerstache   | Kale        | Chips     | Keytar    |
-| Sriracha       | Gluten-free | Ennui     | Keffiyeh  |
-| Thundercats    | Jean        | Shorts    | Biodiesel |
-| Terry          | Richardson  | Swag      | Blog      |
-+----------------|-------------|-----------|-----------+
+...
+{% endhighlight %}
 
 
-## Таблица с дополнительным полем
+## &nbsp;
+{:.big-code}
+{% highlight python %}
+class LogicalOperator(Operator):
+    def compile(self):
+        lft, right = self.children
+        return {self.operator: [lft.compile(), right.compile()]}
 
-{:.with-additional-line}
-|  Locavore      | Umami       | Helvetica | Vegan     |
-+----------------|-------------|-----------|-----------+
-| Fingerstache   | Kale        | Chips     | Keytar    |
-| Sriracha       | Gluten-free | Ennui     | Keffiyeh  |
-| Thundercats    | Jean        | Shorts    | Biodiesel |
-| Terry          | Richardson  | Swag      | Blog      |
-+----------------|-------------|-----------|-----------+
-| Terry          | Richardson  | Swag      | Blog      |
+
+class CmpOperator(Operator):
+    def compile(self):
+        lft, right = self.children
+        return {left.compile(): {self.operator: right.compile()}}
+
+class Function(AST):
+    func_map = {
+        'me': os.getlogin,
+        'today': lambda: int(datetime.today().strftime('%s')),
+    }
+
+    def compile():
+        return self.func_map[self.name]()
+
+
+class Text(AST):
+    def compile(self):
+        return self.text
+{% endhighlight %}
+
+
+## Проверяем
+{% highlight python %}
+from funcparserlib.util import pretty_tree as pretty
+
+query = 'author=zubchick AND title~=test OR pub_date>=today()'
+res = expr.parse(tokenize(query))
+
+print "Original query:"
+print query
+print
+print "AST:"
+print pretty(res,
+             lambda x: getattr(x, 'children', []),
+             lambda x: x.__class__.__name__)
+print
+print "Mongo request:"
+print pprint(res.compile())
+{% endhighlight %}
+
+## &nbsp;
+{:.big-code}
+{% highlight bash %}
+Original query:
+author=zubchick AND title~=test OR created>=today()
+
+AST:
+OrOp
+|-- AndOp
+|   |-- EqOp
+|   |   |-- Text
+|   |   `-- Text
+|   `-- RegexpOp
+|       |-- Text
+|       `-- Text
+`-- LteOp
+    |-- Text
+    `-- Function
+
+Mongo request:
+{'$or': [{'$and': [{'author': {'$eq': 'zubchick'}},
+                   {'title': {'$regex': 'test'}}]},
+         {'created': {'$gte': 1440761756}}]}
+{% endhighlight %}
+
+
+## Что можно улучшить
+* Добавить операторов
+* Добавить функций
+* Прокидывать контекст в функцию compile
+* Добавить проверку прав
+* Оптимизировать дерево
 
 ## **Контакты** {#contacts}
 
