@@ -12,7 +12,7 @@ kramdown:
   enable_coderay: false
 
 presentation:
-    title: Пишем парсер
+    title: Как написать парсер для своего языка
     nda: false
 
 author:

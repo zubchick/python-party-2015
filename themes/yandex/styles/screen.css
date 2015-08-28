@@ -624,8 +624,8 @@ body .slide:first-of-type h2
 .slide.big-code pre
 {
     position: absolute;
-    top: -11px;
-    bottom: -10px;
+    top: 0px;
+    bottom: -45px;
     left: 40px;
 
     width: 982px;

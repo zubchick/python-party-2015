@@ -19,6 +19,375 @@ layout: default
 	<p class="author">{{ site.author.name }}, <br/> {{ site.author.position }}</p>
 </div>
 
+## О чем доклад
+* Два слова о парсерах
+* Где применить
+  * Конфиги
+  * Языки разметки
+  * Языки шаблонов
+  * Язык программирования
+  * Языки зарпосов
+* О чем не буду рассказывать
+
+## Примеры языков запросов
+* SQL
+* Cypher (Neo4j)
+* XPath
+* Язык запросов к Яндексу
+
+## Задача
+* Есть пользователь
+* Есть монга
+* Нет доверия
+* Нет любви
+
+## Синтаксис
+
+{% highlight sql %}
+author=zubchick AND title~=test AND created>=today()
+{% endhighlight %}
+
+{% highlight sql %}
+(author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
+{% endhighlight %}
+
+
+## Шаги
+* Лексический анализ
+* Парсинг
+    * Промежуточное дерево разбора
+    * Абстрактное синтаксическое дерево
+* Компиляция
+
+
+## Пишем свой парсер
+{:.section}
+
+### Лексический анализ
+
+
+## Составные части
+
+### Логические операторы
+<pre><code class="language-sql" data-lang="sql">author=zubchick <span class="k">AND</span> title~=test <span class="k">AND</span> created>=today()
+</code></pre>
+
+* <code>AND</code>
+* <code>OR</code>
+
+## Составные части
+
+### Операторы сравнения
+<pre><code class="language-sql" data-lang="sql">author<span class="o">=</span>zubchick AND title<span class="o">~=</span>test AND created<span class="o">>=</span>today()
+</code></pre>
+* <code>~=</code>
+* <code>&gt;=</code>
+* <code>&lt;=</code>
+* <code>=</code>
+* <code>*=</code>
+* etc.
+
+## Составные части
+
+### Имена полей
+<pre><code class="language-sql" data-lang="sql"><span
+class="ss">author</span>=zubchick AND <span class="ss">title</span>~=test AND <span class="ss">created</span>>=today()
+</code></pre>
+
+## Составные части
+
+### Текст в кавычках и без
+<pre><code class="language-sql" data-lang="sql">author=<span
+class="ss">zubchick</span> AND title~=<span class="ss">test</span> AND created>=today()
+</code></pre>
+
+
+<pre><code class="language-sql" data-lang="sql">(author=me() OR author=<span
+class="ss">test_user</span>) AND created=<span class="ss">"19-08-2015"</span> AND type=<span class="ss">bug</span>
+</code></pre>
+
+
+## Составные части
+
+### Функции
+<pre><code class="language-sql" data-lang="sql">author=zubchick AND title~=test AND created>=<span class="ss">today()</span>
+</code></pre>
+
+<pre><code class="language-sql" data-lang="sql">(author=<span class="ss">me()</span> OR author=test_user) AND created="19-08-2015" AND type=bug
+</code></pre>
+
+
+## Составные части
+
+### Вспомогательные символы
+* Скобочки <code>(</code> <code>)</code>
+* Пробелы <code>&nbsp;</code> <code>\t</code> <code>\n</code>
+
+
+## Лексер
+
+{% highlight python %}
+from funcparserlib.lexer import make_tokenizer, Token
+
+SPECS = [
+    ('CMP', (r'~=|>=|<=|@=|<|>|=',)),
+    ('BR', (r'\(|\)',)),
+    ('OP', (r'AND|OR',)),
+    ('SPACE', (r'[ \t\r\n]+',)),
+    ('STRING', (r'"(?:[^"\\]|\\.)*"',)),
+    ('WORD', ('\w+',)),
+]
+
+tokenizer = make_tokenizer(SPECS)
+
+
+def tokenize(query):
+    return [tok for tok in tokenizer(query) if tok.type != 'SPACE']
+{% endhighlight %}
+
+
+## Токен
+
+{% highlight python %}
+class Token(object):
+    def __init__(self, type, value, start=None, end=None):
+        self.type = type
+        self.value = value
+        self.start = start
+        self.end = end
+{% endhighlight %}
+
+## Проверяем
+{% highlight python %}
+In [3]: tokenize('author=zubchick AND title~=test AND created>=today()')
+Out[3]:
+[Token('WORD', 'author'),
+ Token('CMP', '='),
+ Token('WORD', 'zubchick'),
+ Token('OP', 'AND'),
+ Token('WORD', 'title'),
+ Token('CMP', '~='),
+ Token('WORD', 'test'),
+ Token('OP', 'AND'),
+ Token('WORD', 'created'),
+ Token('CMP', '>='),
+ Token('WORD', 'today'),
+ Token('BR', '('),
+ Token('BR', ')')]
+{% endhighlight %}
+
+
+## Пишем свой парсер
+{:.section}
+
+### Синтаксический анализ
+
+
+## Грамматика
+
+### Расширенная форма Бэкуса — Наура
+
+{% highlight ebnf %}
+expr       = orexpr;
+
+orexpr     = andexpr, {"OR", andexpr};
+andexpr    = basexpr, {"AND", basexpr};
+basexpr    = "(" expr ")" | fieldexpr;
+
+fieldexpr  = WORD, operator, (function | value);
+operator   = "~=" | ">=" | "<=" | "<" | ">" | "=" | "@=";
+function   = WORD, "(", ")";
+value      = STRING | WORD;
+{% endhighlight %}
+
+
+## Синтаксис
+
+{% highlight sql %}
+author=zubchick AND title~=test AND created>=today()
+{% endhighlight %}
+
+{% highlight sql %}
+(author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
+{% endhighlight %}
+
+
+## Теперь тоже самое на python
+
+{% highlight python %}
+from funcparserlib.parser import some, a, many, skip, forward_decl
+
+# operator: '~=' | '>=' | '<=' | '<' | '>' | '=' | '@='
+operator = some(lambda tok: tok.type == 'CMP')
+
+string = some(lambda tok: tok.type == 'STRING')
+word = some(lambda tok: tok.type == 'WORD')
+
+OR = a(Token('OP', 'OR'))
+AND = a(Token('OP', 'AND'))
+{% endhighlight %}
+
+## Field expression
+
+{% highlight python %}
+open_brace = skip(a(Token('BR', '(')))
+close_brace = skip(a(Token('BR', ')')))
+function = word + open_brace + close_brace
+
+value = string | word
+fieldexpr = word + operator + (function | value)
+{% endhighlight %}
+
+
+## Expression
+
+{% highlight python %}
+expr = forward_decl()
+
+basexpr = open_brace + expr + close_brace | fieldexpr
+andexpr = basexpr + many(AND + basexpr)
+orexpr = andexpr + many(OR + andexpr)
+expr.define(orexpr)
+{% endhighlight %}
+
+
+## Проверяем
+
+{% highlight python %}
+In [8]: expr.parse(tokenize('author=zubchick AND title~=test AND created>=today()'))
+Out[8]:
+(Token('WORD', 'author'),
+ Token('CMP', '='),
+ Token('WORD', 'zubchick'),
+ [(Token('OP', 'AND'),
+   (Token('WORD', 'title'), Token('CMP', '~='), Token('WORD', 'test'))),
+  (Token('OP', 'AND'),
+   (Token('WORD', 'created'), Token('CMP', '>='), Token('WORD', 'today')))],
+ [])
+{% endhighlight %}
+
+
+## Синтаксический анализ
+{:.section}
+
+### AST
+
+## &nbsp;
+{:.big-code}
+{% highlight python %}
+class AST:
+    children = ()
+
+
+class Operator(AST):
+    value = None
+
+    def __init__(self, children):
+        self.children = children
+
+    def __repr__(self):
+        return "%s %s (%s)" % (self.__class__.__name__,
+                               self.value, map(repr, self.children))
+
+
+class LogicalOperator(Operator):
+    pass
+
+
+class CmpOperator(Operator):
+    pass
+{% endhighlight %}
+
+## &nbsp;
+{:.big-code}
+{% highlight python %}
+class Function(AST):
+    def __init__(self, text):
+        self.name = text.text
+
+    def __repr__(self):
+        return "%s()" % (self.name)
+
+
+class Text(AST):
+    def __init__(self, tok):
+        self.text = tok.value
+
+    def __repr__(self):
+        return "Text(%s)" % self.text
+{% endhighlight %}
+
+
+## &nbsp;
+{:.big-code}
+{% highlight python %}
+class AndOp(LogicalOperator):
+    value = 'AND'
+
+class OrOp(LogicalOperator):
+    value = 'OR'
+
+class GtOp(CmpOperator):
+    value = '>'
+
+class LtOp(CmpOperator):
+    value = '<'
+
+class GteOp(CmpOperator):
+    value = '<='
+
+class LteOp(CmpOperator):
+    value = '>='
+
+class RegexpOp(CmpOperator):
+    value = '~='
+
+class ContainsOp(CmpOperator):
+    value = '@='
+{% endhighlight %}
+
+
+
+## Добавляем колбеки
+{% highlight python %}
+operator = some(lambda tok: tok.type == 'CMP') >> choose_class
+
+string = some(lambda tok: tok.type == 'STRING') >> Text
+word = some(lambda tok: tok.type == 'WORD') >> Text
+
+function = word + open_brace + close_brace >> Function
+
+OR = a(Token('OP', 'OR')) >> lambda tok: OrOp
+AND = a(Token('OP', 'AND')) >> lambda tok: AndOp
+{% endhighlight %}
+
+
+## Разворачиваем в дерево
+{:.images .two}
+
+<img width="400px" src="pictures/ast2.svg">
+*Текст*
+
+<img width="400px" src="pictures/ast1.svg">
+*Текст*
+
+
+## Разворачиваем в дерево
+{% highlight python %}
+def eval(data):
+    lft, args = data
+    return reduce(lambda arg1, (f, arg2): f([arg1, arg2]), args, lft)
+{% endhighlight %}
+
+
+
+
+
+
+
+<!-- Рыба -->
+
+
 ## Верхний колонтитул
 {:.section}
 
@@ -52,12 +421,6 @@ layout: default
 {:.note}
 
 ## Пример подсветки кода на JavaScript
-
-
-{% highlight python %}
-def yourfunction():
-     print "Hello World!"
-{% endhighlight %}
 
 ~~~ javascript
 !function() {
@@ -288,10 +651,8 @@ $$x = {-b \pm \sqrt{b^2-4ac} \over 2a}.$$
 <p class="position">{{ site.author.position }}</p>
 
     <div class="contacts">
-        <p class="contacts-left contacts-top phone">+7 (000) 000-00-00</p>
-        <p class="contacts-left mail">почта@yandex-team.ru</p>
-        <p class="contacts-right contacts-top twitter">@twitter</p>
-        <!-- <p class="contacts-right contacts-bottom vk">vk</p> -->
-        <p class="contacts-right facebook">facebook</p>
+        <p class="contacts-left mail">zubchick@yandex-team.ru</p>
+        <p class="contacts-left contacts-top twitter">@zubchick</p>
+
     </div>
 </div>
