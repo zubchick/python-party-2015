@@ -25,12 +25,12 @@ layout: default
 * Где применить
   * Конфиги
   * Языки разметки
-  * Языки шаблонов
   * Язык программирования
-  * Языки зарпосов
+  * Языки запросов
 * О чем не буду рассказывать
     * Теория
     * Естественные языки
+
 ## Примеры языков запросов
 * SQL
 * Cypher (Neo4j)
@@ -43,6 +43,7 @@ layout: default
 * Нет доверия
 * Нет любви
 
+
 ## Синтаксис
 
 {% highlight sql %}
@@ -52,6 +53,13 @@ author=zubchick AND title~=test OR created>=today()
 {% highlight sql %}
 (author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
 {% endhighlight %}
+
+
+## Почему бы не написать пару регулярок
+* Кто же вас остановит
+* Но это не будет работать
+* Это трудно поддерживать
+* Трудно расширять
 
 
 ## Шаги
@@ -86,7 +94,7 @@ author=zubchick AND title~=test OR created>=today()
 * <code>&gt;=</code>
 * <code>&lt;=</code>
 * <code>=</code>
-* <code>*=</code>
+* <code>@=</code>
 * etc.
 
 ## Составные части
@@ -197,7 +205,7 @@ andexpr    = basexpr, {"AND", basexpr};
 basexpr    = "(" expr ")" | fieldexpr;
 
 fieldexpr  = WORD, operator, (function | value);
-operator   = "~=" | ">=" | "<=" | "<" | ">" | "=" | "@=";
+operator   = "~=" | ">=" | "<=" | "@=" | "<" | ">" | "=";
 function   = WORD, "(", ")";
 value      = STRING | WORD;
 {% endhighlight %}
@@ -508,6 +516,7 @@ Mongo request:
 * Прокидывать контекст в функцию compile
 * Добавить проверку прав
 * Оптимизировать дерево
+* Генерировать sql после переезда на postrgresql
 
 ## **Контакты** {#contacts}
 
