@@ -1,0 +1,548 @@
+* Что такое парсер и зачем
+  - Языки программирования
+  - Конфигурационные файлы
+  - Языки запросов
+  - Языки разметки
+  - etc
+* Где используется у нас во внутренних сервисах
+  рассказать что вики парсилась регулярками
+  - Вики
+  - Трекер
+  - Поиск
+* Процесс
+  - Разбиение на токены
+  - Синтаксический анализ (парсинг)
+  - Дерево разбора
+  - Абстрактное синтаксическое дерево
+  - Компиляция
+* Задача
+Иногда нужно дать пользователю возможность делать произвольные выборки
+из вашей базы, но при этом не давать ему полный доступ до базы. Тоесть
+нельзя просто дать пользователю окошко в котором он будет писать sql
+потому что он напишет туда DROP TABLE users; или посммотрит в те места
+куда у него не может быть доступа.
+
+Напишем небольшой язык который позволит делать пользователю
+произвольные выборки документов. 
+* Язык
+author.last_name=Orwell AND name=1984 AND creaeted>="31-12-1999"
+isbn=100500 OR isbn=100501 OR title="Tom Sawyer"
+(author.last_name=Ильф OR author.last_name=Петров) AND creaeted<"31-12-1999"
+* вступление
+Всем привет, меня зовут Никита Зубков и я работаю во внутренних
+сервисах Яндекса, я делаю поиск по интранету. Сегодня я расскажу вам
+немножко про пасеры и покажу как можно написать свой на питоне. Для
+начала пару слов что это такое и как используется. Под парсером мы
+будем понимать такую программу которая принимает текст и
+преобразовывает его в структурированный формат. Например парсер
+кофигурационных файлов или парсер языка программирования или языка
+разметки или языка шаблонов или языка запросов. О чем мы не будем
+говорить так это о естественных языках, их парсить гораздо сложнее.
+Так же я не буду вдавать в теорию, времени у меня мало, да и я в ней
+не слишком глубоко разбираюсь, так что у нас будет практически чисто
+прикладной доклад. Так что сразу прошу прощения у людей которые
+глубоко разбираются в теории за глупости которые могу наговорить.
+
+У нас во внутренних сервисах есть несколько своих языков, у нас есть
+внутренняя вики в которой есть свой язык разметки, у нас есть язык
+запросов во внутрннем таск трекере для фильтрации тикетов, а так же у
+нас есть язык запросов в поиск по интранету. Многие думают что писать
+парсеры очень сложно и что лучше налабать пару десяток регулярок и все
+будет нормально. Впринципе это вариант, но это довольно сложно
+расширять какими-то новыми конструкциями, а так же если у вас какая-то
+вложенная структура приоритет операций, тут уже без нормального
+парсера вообще буде трудно.
+
+У поискового движка которым мы пользуемся во внутреннем поиске есть
+свой язык запросов, мы его активно юзали мы расширяем запрос
+пользователя синонимами, добавляем различные фильтрации или еще
+каким-то образом меняем начальный запрос. Раньше мы делали это
+подстановками и регулярками, но это все плохо работало потому что
+пользователь мог ввести какой-нибудь хитрый запрос с открывающей
+кавычкой например и сломать наши регулярки или обойти систему проверки
+прав которая работала у нас так же через фильтры языком запросов и
+тому подобное. Все то что вы знаете под словом sql иньекция только без
+sql. Так же у нас была пролема в том что мы хотели бы в сниппетах
+текста которые находятся под ссылками в поисковой выдаче подсвечивать
+найденные слова запроса, но мы не понимали где в запросе собственно
+слова запроса, а где операторы и служебные конструкции языка. Так что
+мы решили написать парсер языка запросов, модифицировать распаршенное
+дерево дополняя его нужными нам расширениями, а потом компилировать
+обратно в строчку и отправлять в поисковый движок.
+
+* Давайте для примера напишем парсер
+Похожий на тот что я делал для поиска, только будем компилировать
+результат в запрос к mongodb.
+
+Будем ходить за тикетами в абстрактный таск трекер, например в джире
+такой язык есть. Особенности такого языка в том что мы не должны
+давать возможность делать запросы ни по чему кроме тикетов, а так же
+не должны давать искать по тем тикетам к которым у запрашивающего нет
+доступа. Вот я тут накидал пару примеров того чего нужно уметь:
+
+author=zubchick AND title~=test AND created>=today()
+(author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
+
+Сразу видим из каких составных частей у нас состоит язык
+у нас есть операторы
+логические: AND OR - зарезервированные
+сравнения: = ~= >= <= > < 
+есть названия полей по которым мы ищем:
+author title created - они не зарезервированные слова
+есть функции me() today()
+есть слова по которым мы фильтруем zubchick test "19-08-2015" bug
+Они бывают в кавычках и без кавычек
+так же есть скобочки
+
+* Первым шагом
+Нам нужно разбить входящее сообщение на токены, чтобы было удобнее
+работать дальше. Токенами будут примерно те вещи которые мы описали
+выше. Есть библиотеки для парсинга которые объединяют шаг разбиения на
+токены и собственно сам парсинг, это так называемые PEG парсеры
+например есть хороший https://github.com/erikrose/parsimonious Но мы
+напишем пример не помощью другой библиотеки которая называется
+funcparserlib https://github.com/vlasovskikh/funcparserlib Это
+библиотека использует подход комбинаторов парсеров, об этом чуть
+позже, а пока нужно разбить входящий заропс на токены (лексемы). Для
+такого простого языка нам хватит лексера который предоставляется
+вместе с funcparserlib. Для более сложных вещей возможно имеет смысл
+использовать что-то другое.
+
+```
+from funcparserlib.lexer import make_tokenizer, Token
+
+SPECS = [
+    ('CMP', (r'~=|>=|<=|<|>|=',)),
+    ('OP', (r'\(|\)',)),
+    ('OP', (r'AND|OR',)),
+    ('SPACE', (r'[ \t\r\n]+',)),
+    ('STRING', ('"[^"]+"',)),
+    ('WORD', ('\w+',)),
+]
+
+tokenizer = make_tokenizer(SPECS)
+
+list(tokenizer('author=zubchick AND title~=test AND created>=today()'))
+[Token('WORD', 'author'),
+ Token('CMP', '='),
+ Token('WORD', 'zubchick'),
+ Token('SPACE', ' '),
+ Token('OP', 'AND'),
+ Token('SPACE', ' '),
+ Token('WORD', 'title'),
+ Token('CMP', '~='),
+ Token('WORD', 'test'),
+ Token('SPACE', ' '),
+ Token('OP', 'AND'),
+ Token('SPACE', ' '),
+ Token('WORD', 'created'),
+ Token('CMP', '>='),
+ Token('WORD', 'today'),
+ Token('OP', '('),
+ Token('OP', ')')]
+
+def tokenize(query):
+    return [tok for tok in tokenizer(query) if tok.type != 'SPACE']
+
+```
+
+* Дальше поговорим про парсеры
+Теперь мы хотим превратить это набор токенов в конструкцию с которой
+потом можно будет удобно работать. Например дерево, можно его
+представить вложенными диктами, например. Для этого нужно написать
+правила их обработки. В теории есть формальная система для определения
+таких грамматик для таких языков, называется Расширенная Форма Бэкуса
+– Наура вы могли видеть примеры в документации по питону. Там одни
+синтаксические конструкции определяются через другие
+
+Для нашего языка получится что-то вроде:
+```
+expression: field_expr | '(' sub_expr ')'
+field_expr: WORD operator (function | value)
+operator: '~=' | '>=' | '<=' | '<' | '>' | '=' | '@='
+function: WORD '(' ')'
+value: STRING | WORD
+sub_expr: and_expr ('OR' and_expr)*
+and_expr: expression ('AND' expression)*
+```
+
+Есть библиотеки которые примут такое или похоже описание грамматики и
+сгенерируют вам парсер. Но мы пойдем несколько иным путем, мы будем
+определять финальный парсер комбинируя простые парсеры в более
+сложные, этот подход имеет свои преимущества, например можно
+тестировать каждый кусочек по отдельности, смотреть что получается.
+Можно назначить колбек функции которые будут получать кусочки которые
+вычитал маленький парсер и что-то сразу с ними делать. Так же не нужно
+пистаь грамматику, а можно писать код на пиотне.
+
+Будем идти по нашей грамматике, раз уж она у нас уже есть и переводить
+ее в код. Начнем с низу
+
+```
+from funcparserlib.parser import (some, a, many, skip, finished, maybe,
+                                  forward_decl, oneplus)
+from funcparserlib.lexer import make_tokenizer, Token
+
+# operator: '~=' | '>=' | '<=' | '<' | '>' | '=' | '@='
+operator = some(lambda tok: tok.type == 'CMP')
+
+# value: STRING | WORD
+string = some(lambda tok: tok.type == 'STRING')
+word = some(lambda tok: tok.type == 'WORD')
+value = string | word
+
+# function: WORD '(' ')'
+open_brace = skip(a(Token('OP', '(')))
+close_brace = skip(a(Token('OP', ')')))
+function = word + open_brace + close_brace
+
+# field_expr: WORD operator value
+field_expr = word + operator + (function | value)
+
+OR = a(Token('OP', 'OR'))
+AND = a(Token('OP', 'AND'))
+
+expr = forward_decl()
+base_expr = field_expr | open_brace + expr + close_brace
+and_expr = base_expr + many(AND + base_expr)
+or_expr = and_expr + many(OR + and_expr)
+
+expr.define(or_expr)
+```
+
+```
+expr.parse(tokenize('author=zubchick AND title~=test AND pub_date>=today()'))
+
+(Token('WORD', 'author'),
+ Token('CMP', '='),
+ Token('WORD', 'zubchick'),
+ [(Token('OP', 'AND'),
+   (Token('WORD', 'title'), Token('CMP', '~='), Token('WORD', 'test'))),
+  (Token('OP', 'AND'),
+   (Token('WORD', 'pub_date'), Token('CMP', '>='), Token('WORD', 'today')))],
+ [])
+```
+
+```
+У нас появилось какое-то подобие дерева разбора. Теперь добавить бы
+порядка, избавиться от токенов и перейти к каким-то более удобным
+сущностям. Давайте напишем пару классов
+
+```
+__classes = {}
+def register(cls):
+    __classes[cls.value] = cls
+
+    def init(*args, **kwargs):
+        return cls(*argsm **kwargs)
+    return init
+
+
+def choose_class(token):
+    return __classes[token.value]
+
+
+class AST:
+    children = ()
+
+class Operator(AST):
+    value = None
+    operator = None
+
+    def __init__(self, children):
+        self.children = children
+
+    def __repr__(self):
+        return "%s %s %s" % (self.__class__.__name__, self.value, map(repr, self.children))
+
+
+class LogicalOperator(Operator):
+    pass
+
+
+@register
+class AndOp(LogicalOperator):
+    value = 'AND'
+
+
+@register
+class OrOp(LogicalOperator):
+    value = 'OR'
+
+
+class CmpOperator(Operator):
+    pass
+
+
+@register
+class GtOp(CmpOperator):
+    value = '>'
+
+
+@register
+class LtOp(CmpOperator):
+    value = '<'
+
+
+@register
+class GteOp(CmpOperator):
+    value = '<='
+
+
+@register
+class LteOp(CmpOperator):
+    value = '>='
+
+
+@register
+class RegexpOp(CmpOperator):
+    value = '~='
+
+
+@register
+class ContainsOp(CmpOperator):
+    value = '@='
+
+
+@register
+class EqOp(CmpOperator):
+    value = '='
+
+
+class Function(AST):
+    def __init__(self, tok):
+        self.name = tok.value
+
+    def __repr__(self):
+        return "%s()" % (self.name)
+
+
+class Text(AST):
+    def __init__(self, tok):
+        self.text = tok.value
+
+    def __repr__(self):
+        return "Text(%s)" % self.text
+```
+
+Теперь добавим эти обработчики в код парсерв в виде колбек функций.
+Колбек функции получают на вход распаршенную часть, список токенов,
+который данный парсер взял из общего потока токенов. Пример:
+```
+OR = OR >> choose_class
+AND = AND >> choose_class
+operator = operator >> choose_class
+
+string = string >> Text
+word = word >> Text
+function = function >> Function
+
+field_expr = word + operator + (function | value)
+field_expr = field_expr >> lambda x: x[1]([x[0], x[2]])
+```
+
+Теперь преобразуем все это из списков в полноценное дерево
+
+```
+def eval(data):
+    lft, args = data
+    return reduce(lambda arg1, (f, arg2): f([arg1, arg2]), args, lft)
+
+
+from funcparserlib.parser import (some, a, many, skip, finished, maybe,
+                                  forward_decl, oneplus)
+from funcparserlib.lexer import make_tokenizer, Token
+
+# operator: '~=' | '>=' | '<=' | '<' | '>' | '='
+operator = some(lambda tok: tok.type == 'CMP') >> choose_class
+
+# value: STRING | WORD
+string = some(lambda tok: tok.type == 'STRING') >> Text
+word = some(lambda tok: tok.type == 'WORD') >> Text
+value = string | word
+
+# function: WORD '(' ')'
+open_brace = skip(a(Token('OP', '(')))
+close_brace = skip(a(Token('OP', ')')))
+function = word + open_brace + close_brace
+
+# field_expr: WORD operator value
+field_expr = (word + operator + (function | value)) >> (lambda x: x[1]([x[0], x[2]]))
+
+OR = a(Token('OP', 'OR')) >> choose_class
+AND = a(Token('OP', 'AND')) >> choose_class
+
+
+expr = forward_decl()
+base_expr = field_expr | open_brace + expr + close_brace
+and_expr = (base_expr + many(AND + base_expr)) >> eval
+or_expr = (and_expr + many(OR + and_expr)) >> eval
+
+expr.define(or_expr)
+
+from funcparserlib.util import pretty_tree as pretty
+print pretty(res, lambda x: getattr(x, 'children', []), lambda x: x.__class__.__name__)
+```
+
+Теперь напишем компилятор всего этого дела в запрос к монге
+Можно напистаь отдельную функцию, можно добавить метод compile для
+каждого класса в ast
+
+```
+class LogicalOperator(Operator):
+    def compile(self):
+        lft, right = self.children
+        return {self.operator: [lft.compile(), right.compile()]}
+
+
+class CmpOperator(Operator):
+    def compile(self):
+        lft, right = self.children
+        return {left.compile(): {self.operator: right.compile()}}
+
+
+class Function(AST):
+    def __init__(self, tok):
+        self.name = tok.value
+
+    def __repr__(self):
+        return "%s()" % (self.name)
+
+    def compile():
+        return self.func_map[self.name]()
+
+
+class Text(AST):
+    def __init__(self, tok):
+        self.text = tok.value
+
+    def __repr__(self):
+        return "Text(%s)" % self.text
+
+    def compile(self):
+        return self.text
+
+@register
+class AndOp(LogicalOperator):
+    value = 'AND'
+    operator = '$and'
+
+
+@register
+class OrOp(LogicalOperator):
+    value = 'OR'
+    operator = '$or'
+
+
+@register
+class GtOp(CmpOperator):
+    value = '>'
+    operator = '$gt'
+
+@register
+class LtOp(CmpOperator):
+    value = '<'
+    operator = '$lt'
+
+
+@register
+class GteOp(CmpOperator):
+    value = '<='
+    operator = '$lte'
+
+
+@register
+class LteOp(CmpOperator):
+    value = '>='
+    operator = '$gte'
+
+
+@register
+class RegexpOp(CmpOperator):
+    value = '~='
+    operator = '$regex'
+
+
+@register
+class ContainsOp(CmpOperator):
+    value = '@='
+    operator = '$in'
+
+
+@register
+class EqOp(CmpOperator):
+    value = '='
+    operator = '$eq'
+```
+
+
+Теперь у вас есть абстрактное дерево, а так же есть компилятор в
+выражение для монги. Давайте добавим проверку прав, выглядеть это
+будет примерно так:
+
+```
+query = get_user_query()
+user = get_user()
+
+tree = parse_query(query)
+acl_query = ContainsOp([Text('acl'), Text(user.login)])
+
+result_query = AndOp([acl_query, tree])
+return result_query.compile()
+
+
+Финальный код parser.py
+
+* План
+1. Представиться.
+2. О чем доклад
+   - Два слова о парсерах
+   - Где можно применить
+     + Конфиги
+     + Языки разметки
+     + Языки шаблонов
+     + Языки программирования
+   - О чем не буду рассказывать
+3. Пишем парсер.
+   - Есть монга не хотим давать полный доступ, но хотим дать
+     возможность делать произвольные выборки.
+4. Синтаксис
+   author=zubchick AND title~=test AND created>=today()
+   (author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
+
+   - Составные части языка
+5. Шаги
+   - Разбиваем текст на токены
+   - Превращаем токены в дерево разбора
+   - Превращаем дерево разбора в абстрактное синтаксическое дерево
+   - Превращаем AST в dict который будем отправлять в монгу
+6. Код
+7. Лексический анализ
+
+```
+from funcparserlib.lexer import make_tokenizer, Token
+
+SPECS = [
+    ('CMP', (r'~=|>=|<=|<|>|=|*=',)),
+    ('BR', (r'\(|\)',)),
+    ('OP', (r'AND|OR',)),
+    ('SPACE', (r'[ \t\r\n]+',)),
+    ('STRING', (r'"(?:[^"\\]|\\.)*"',)),
+    ('WORD', ('\w+',)),
+]
+
+tokenizer = make_tokenizer(SPECS)
+
+
+def tokenize(query):
+    return [tok for tok in tokenizer(query) if tok.type != 'SPACE']
+```
+
+```
+class Token(object):
+    def __init__(self, type, value, start=None, end=None):
+        self.type = type
+        self.value = value
+        self.start = start
+        self.end = end
+```
