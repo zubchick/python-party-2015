@@ -1,7 +1,5 @@
 # coding: utf-8
 import os
-import sys
-from pprint import pprint
 from datetime import datetime
 
 from funcparserlib.parser import some, a, many, skip, forward_decl
@@ -75,6 +73,11 @@ class Text(AST):
         return self.text
 
 
+class QuotedText(Text):
+    def __init__(self, tok):
+        self.text = tok.value[1:-1]
+
+
 @register
 class AndOp(LogicalOperator):
     value = 'AND'
@@ -100,13 +103,13 @@ class LtOp(CmpOperator):
 
 
 @register
-class GteOp(CmpOperator):
+class LteOp(CmpOperator):
     value = '<='
     operator = '$lte'
 
 
 @register
-class LteOp(CmpOperator):
+class GteOp(CmpOperator):
     value = '>='
     operator = '$gte'
 
@@ -146,50 +149,68 @@ tokenizer = make_tokenizer(SPECS)
 def tokenize(query):
     return [tok for tok in tokenizer(query) if tok.type != 'SPACE']
 
-# operator: '~=' | '>=' | '<=' | '<' | '>' | '='
-operator = some(lambda tok: tok.type == 'CMP') >> choose_class
 
-# value: STRING | WORD
-string = some(lambda tok: tok.type == 'STRING') >> Text
-word = some(lambda tok: tok.type == 'WORD') >> Text
-value = string | word
+def create_parser():
+    # operator: '~=' | '>=' | '<=' | '<' | '>' | '='
+    operator = some(lambda tok: tok.type == 'CMP') >> choose_class
 
-# function: WORD '(' ')'
-open_brace = skip(a(Token('BR', '(')))
-close_brace = skip(a(Token('BR', ')')))
-function = word + open_brace + close_brace >> Function
+    # value: STRING | WORD
+    word = some(lambda tok: tok.type == 'WORD') >> Text
+    string = some(lambda tok: tok.type == 'STRING') >> QuotedText
+    value = string | word
 
-# field_expr: WORD operator value
-fieldexpr = (word + operator + (function | value)) >> (lambda x: x[1]([x[0], x[2]]))
+    # function: WORD '(' ')'
+    open_brace = skip(a(Token('BR', '(')))
+    close_brace = skip(a(Token('BR', ')')))
+    function = word + open_brace + close_brace >> Function
 
-OR = a(Token('OP', 'OR')) >> choose_class
-AND = a(Token('OP', 'AND')) >> choose_class
+    # field_expr: WORD operator value
+    fieldexpr = (word + operator + (function | value)) >> (lambda x: x[1]([x[0], x[2]]))
+
+    OR = a(Token('OP', 'OR')) >> choose_class
+    AND = a(Token('OP', 'AND')) >> choose_class
+
+    def eval(data):
+        arg1, lst = data
+        for f, arg2 in lst:
+            arg1 = f([arg1, arg2])
+
+        return arg1
+
+    def eval(data):
+        lft, args = data
+        return reduce(lambda arg1, (f, arg2): f([arg1, arg2]), args, lft)
+
+    expr = forward_decl()
+
+    basexpr = open_brace + expr + close_brace | fieldexpr
+    andexpr = (basexpr + many(AND + basexpr)) >> eval
+    orexpr = (andexpr + many(OR + andexpr)) >> eval
+    expr.define(orexpr)
+
+    return expr
+
+parser = create_parser()
 
 
-def eval(data):
-    lft, args = data
-    return reduce(lambda arg1, (f, arg2): f([arg1, arg2]), args, lft)
+def convert_query(query):
+    return parser.parse(tokenize(query)).compile()
 
 
-expr = forward_decl()
-basexpr = open_brace + expr + close_brace | fieldexpr
-andexpr = (basexpr + many(AND + basexpr)) >> eval
-orexpr = (andexpr + many(OR + andexpr)) >> eval
-expr.define(orexpr)
+if __name__ == '__main__':
+    import sys
+    from pprint import pprint
+    from funcparserlib.util import pretty_tree as pretty
 
+    query = 'author=zubchick AND title~=test OR pub_date>=today()'
+    query = sys.argv[1] if len(sys.argv) > 1 else query
+    res = parser.parse(tokenize(query))
 
-# проверяем
-from funcparserlib.util import pretty_tree as pretty
-
-query = 'author=zubchick AND title~=test OR pub_date>=today()'
-query = sys.argv[1] if len(sys.argv) > 1 else query
-res = expr.parse(tokenize(query))
-
-print "Original query:"
-print query
-print
-print "AST:"
-print pretty(res, lambda x: getattr(x, 'children', []), lambda x: x.__class__.__name__)
-print
-print "Mongo request:"
-print pprint(res.compile())
+    print "Original query:"
+    print query
+    print
+    print "AST:"
+    print pretty(res, lambda x: getattr(x, 'children', []), lambda x: x.__class__.__name__)
+    print
+    print "Mongo request:"
+    pprint(res.compile())

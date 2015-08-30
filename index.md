@@ -26,7 +26,7 @@ layout: default
   * Конфиги
   * Языки разметки
   * Язык программирования
-  * Языки запросов
+  * DSL
 * О чем не буду рассказывать
     * Теория
     * Естественные языки
@@ -69,6 +69,16 @@ author=zubchick AND title~=test OR created>=today()
     * Абстрактное синтаксическое дерево
 * Компиляция
 
+## Инструменты
+* funcparserlib.lexer
+* funcparserlib.parser
+
+<a href="https://github.com/vlasovskikh/funcparserlib">
+https://github.com/vlasovskikh/funcparserlib
+</a>
+<br>
+python 2 и 3
+
 
 ## Пишем свой парсер
 {:.section}
@@ -79,7 +89,7 @@ author=zubchick AND title~=test OR created>=today()
 ## Составные части
 
 ### Логические операторы
-<pre><code class="language-sql" data-lang="sql">author=zubchick <span class="k">AND</span> title~=test <span class="k">OR</span> created>=today()
+<pre><code class="language-sql" data-lang="sql">author=zubchick <span class="o">AND</span> title~=test <span class="o">OR</span> created>=today()
 </code></pre>
 
 * <code>AND</code>
@@ -101,29 +111,29 @@ author=zubchick AND title~=test OR created>=today()
 
 ### Имена полей
 <pre><code class="language-sql" data-lang="sql"><span
-class="ss">author</span>=zubchick AND <span class="ss">title</span>~=test OR <span class="ss">created</span>>=today()
+class="o">author</span>=zubchick AND <span class="o">title</span>~=test OR <span class="o">created</span>>=today()
 </code></pre>
 
 ## Составные части
 
 ### Текст в кавычках и без
 <pre><code class="language-sql" data-lang="sql">author=<span
-class="ss">zubchick</span> AND title~=<span class="ss">test</span> OR created>=today()
+class="o">zubchick</span> AND title~=<span class="o">test</span> OR created>=today()
 </code></pre>
 
 
 <pre><code class="language-sql" data-lang="sql">(author=me() OR author=<span
-class="ss">test_user</span>) AND created=<span class="ss">"19-08-2015"</span> AND type=<span class="ss">bug</span>
+class="o">test_user</span>) AND created=<span class="o">"19-08-2015"</span> AND type=<span class="o">bug</span>
 </code></pre>
 
 
 ## Составные части
 
 ### Функции
-<pre><code class="language-sql" data-lang="sql">author=zubchick AND title~=test OR created>=<span class="ss">today()</span>
+<pre><code class="language-sql" data-lang="sql">author=zubchick AND title~=test OR created>=<span class="o">today()</span>
 </code></pre>
 
-<pre><code class="language-sql" data-lang="sql">(author=<span class="ss">me()</span> OR author=test_user) AND created="19-08-2015" AND type=bug
+<pre><code class="language-sql" data-lang="sql">(author=<span class="o">me()</span> OR author=test_user) AND created="19-08-2015" AND type=bug
 </code></pre>
 
 
@@ -211,17 +221,6 @@ value      = STRING | WORD;
 {% endhighlight %}
 
 
-## Синтаксис
-
-{% highlight sql %}
-author=zubchick AND title~=test OR created>=today()
-{% endhighlight %}
-
-{% highlight sql %}
-(author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
-{% endhighlight %}
-
-
 ## Теперь тоже самое на python
 
 {% highlight python %}
@@ -261,10 +260,62 @@ expr.define(orexpr)
 {% endhighlight %}
 
 
+## Синтаксис
+{% highlight sql %}
+(author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
+{% endhighlight %}
+
+
+## &nbsp;
+{:.big-code}
+
+{% highlight python %}
+## Весь парсер на одном слайде
+
+operator = some(lambda tok: tok.type == 'CMP')
+string = some(lambda tok: tok.type == 'STRING')
+word = some(lambda tok: tok.type == 'WORD')
+
+OR = a(Token('OP', 'OR'))
+AND = a(Token('OP', 'AND'))
+
+open_brace = skip(a(Token('BR', '(')))
+close_brace = skip(a(Token('BR', ')')))
+function = word + open_brace + close_brace
+
+value = string | word
+fieldexpr = word + operator + (function | value)
+
+expr = forward_decl()
+
+basexpr = open_brace + expr + close_brace | fieldexpr
+andexpr = basexpr + many(AND + basexpr)
+orexpr = andexpr + many(OR + andexpr)
+expr.define(orexpr)
+{% endhighlight %}
+
+
+## А вот что было
+{% highlight ebnf %}
+expr       = orexpr;
+
+orexpr     = andexpr, {"OR", andexpr};
+andexpr    = basexpr, {"AND", basexpr};
+basexpr    = "(" expr ")" | fieldexpr;
+
+fieldexpr  = WORD, operator, (function | value);
+operator   = "~=" | ">=" | "<=" | "@=" | "<" | ">" | "=";
+function   = WORD, "(", ")";
+value      = STRING | WORD;
+{% endhighlight %}
+
+
 ## Проверяем
 
 {% highlight python %}
-In [8]: expr.parse(tokenize('author=zubchick AND title~=test AND created>=today()'))
+In [8]: expr.parse(tokenize(
+            'author=zubchick AND title~=test AND created>=today()'
+        ))
 Out[8]:
 (Token('WORD', 'author'),
  Token('CMP', '='),
@@ -285,7 +336,7 @@ Out[8]:
 ## &nbsp;
 {:.big-code}
 {% highlight python %}
-class AST:
+class AST(object):
     children = ()
 
 
@@ -325,6 +376,12 @@ class Text(AST):
 
     def __repr__(self):
         return "Text(%s)" % self.text
+
+
+class QuotedText(Text):
+    def __init__(self, tok):
+        self.text = tok.value[1:-1]
+
 {% endhighlight %}
 
 
@@ -343,10 +400,10 @@ class GtOp(CmpOperator):
 class LtOp(CmpOperator):
     value = '<'
 
-class GteOp(CmpOperator):
+class LteOp(CmpOperator):
     value = '<='
 
-class LteOp(CmpOperator):
+class GteOp(CmpOperator):
     value = '>='
 
 class RegexOp(CmpOperator):
@@ -358,17 +415,17 @@ class ContainsOp(CmpOperator):
 
 
 
-## Добавляем колбеки
+## Избавляемся от токенов
 {% highlight python %}
 operator = some(lambda tok: tok.type == 'CMP') >> choose_class
 
-string = some(lambda tok: tok.type == 'STRING') >> Text
 word = some(lambda tok: tok.type == 'WORD') >> Text
+string = some(lambda tok: tok.type == 'STRING') >> Text
 
 function = word + open_brace + close_brace >> Function
 
-OR = a(Token('OP', 'OR')) >> lambda tok: OrOp
-AND = a(Token('OP', 'AND')) >> lambda tok: AndOp
+OR = a(Token('OP', 'OR')) >> lambda _: OrOp
+AND = a(Token('OP', 'AND')) >> lambda _: AndOp
 {% endhighlight %}
 
 
@@ -385,8 +442,44 @@ AND = a(Token('OP', 'AND')) >> lambda tok: AndOp
 ## Разворачиваем в дерево
 {% highlight python %}
 def eval(data):
+    arg1, lst = data
+    for f, arg2 in lst:
+        arg1 = f([arg1, arg2])
+
+    return arg1
+{% endhighlight %}
+
+{% highlight python %}
+def eval(data):
     lft, args = data
     return reduce(lambda arg1, (f, arg2): f([arg1, arg2]), args, lft)
+{% endhighlight %}
+
+
+## Eval
+{% highlight python %}
+andexpr = (basexpr + many(AND + basexpr)) >> eval
+orexpr = (andexpr + many(OR + andexpr)) >> eval
+{% endhighlight %}
+
+
+## Проверяем
+{% highlight sql %}
+author=zubchick AND title~=test OR created>=today()
+{% endhighlight %}
+
+{% highlight bash %}
+OrOp
+|-- AndOp
+|   |-- EqOp
+|   |   |-- Text
+|   |   `-- Text
+|   `-- RegexOp
+|       |-- Text
+|       `-- Text
+`-- GteOp
+    |-- Text
+    `-- Function
 {% endhighlight %}
 
 
@@ -465,25 +558,6 @@ class Text(AST):
 {% endhighlight %}
 
 
-## Проверяем
-{% highlight python %}
-from funcparserlib.util import pretty_tree as pretty
-
-query = 'author=zubchick AND title~=test OR pub_date>=today()'
-res = expr.parse(tokenize(query))
-
-print "Original query:"
-print query
-print
-print "AST:"
-print pretty(res,
-             lambda x: getattr(x, 'children', []),
-             lambda x: x.__class__.__name__)
-print
-print "Mongo request:"
-print pprint(res.compile())
-{% endhighlight %}
-
 ## &nbsp;
 {:.big-code}
 {% highlight bash %}
@@ -509,6 +583,35 @@ Mongo request:
          {'created': {'$gte': 1440761756}}]}
 {% endhighlight %}
 
+## &nbsp;
+{:.big-code}
+{% highlight bash %}
+Original query:
+(author=me() OR author=test_user) AND created="19-08-2015" AND type=bug
+
+AST:
+AndOp
+|-- AndOp
+|   |-- OrOp
+|   |   |-- EqOp
+|   |   |   |-- Text
+|   |   |   `-- Function
+|   |   `-- EqOp
+|   |       |-- Text
+|   |       `-- Text
+|   `-- EqOp
+|       |-- Text
+|       `-- QuotedText
+`-- EqOp
+    |-- Text
+    `-- Text
+
+Mongo request:
+{'$and': [{'$and': [{'$or': [{'author': {'$eq': 'zubchick'}},
+                             {'author': {'$eq': 'test_user'}}]},
+                    {'created': {'$eq': '19-08-2015'}}]},
+          {'type': {'$eq': 'bug'}}]}
+{% endhighlight %}
 
 ## Что можно улучшить
 * Добавить операторов
