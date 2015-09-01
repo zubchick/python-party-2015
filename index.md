@@ -610,6 +610,16 @@ Mongo request:
           {'type': {'$eq': 'bug'}}]}
 {% endhighlight %}
 
+## Full source
+
+<h3>http://git.io/vGorp</h3>
+
+или полная ссылка
+
+<a href="https://gist.github.com/zubchick/5be74487947c8b500950">
+https://gist.github.com/zubchick/5be74487947c8b500950
+</a>
+
 ## Что можно улучшить
 * Добавить операторов
 * Добавить функций
