@@ -119,9 +119,7 @@ class="o">author</span>=zubchick AND <span class="o">title</span>~=test OR <span
 ### Текст в кавычках и без
 <pre><code class="language-sql" data-lang="sql">author=<span
 class="o">zubchick</span> AND title~=<span class="o">test</span> OR created>=today()
-</code></pre>
-
-
+</code></pre><br>
 <pre><code class="language-sql" data-lang="sql">(author=me() OR author=<span
 class="o">test_user</span>) AND created=<span class="o">"19-08-2015"</span> AND type=<span class="o">bug</span>
 </code></pre>
@@ -131,8 +129,7 @@ class="o">test_user</span>) AND created=<span class="o">"19-08-2015"</span> AND 
 
 ### Функции
 <pre><code class="language-sql" data-lang="sql">author=zubchick AND title~=test OR created>=<span class="o">today()</span>
-</code></pre>
-
+</code></pre><br>
 <pre><code class="language-sql" data-lang="sql">(author=<span class="o">me()</span> OR author=test_user) AND created="19-08-2015" AND type=bug
 </code></pre>
 

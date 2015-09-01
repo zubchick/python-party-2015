@@ -788,6 +788,11 @@ body .slide:first-of-type h2
     color: #fc0;
 }
 
+.highlight
+{
+    margin-bottom: 45px;
+}
+
 @media print {
   .list .slide.cover:after,
   .list .slide.shout:after,
